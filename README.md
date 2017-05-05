@@ -1,0 +1,1 @@
+# kubernetes-example-custom-hpa
