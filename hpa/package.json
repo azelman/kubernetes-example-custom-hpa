@@ -1,0 +1,19 @@
+{
+  "name": "hpa",
+  "version": "1.0.0",
+  "description": "example HPA which does pod scaling based on request/sec",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Mark van Straten",
+  "license": "MIT",
+  "dependencies": {
+    "request": "^2.81.0",
+    "rxjs": "^5.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crunchie84/kubernetes-example-custom-hpa"
+  }
+}

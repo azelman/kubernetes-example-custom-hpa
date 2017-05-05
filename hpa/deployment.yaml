@@ -1,0 +1,22 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: my-custom-hpa
+  labels:
+    app: my-custom-hpa
+spec:
+  revisionHistoryLimit: 4 # limit our previous replicasets to four revisions
+  replicas: 1 # will be set by the deploy script
+  template:
+    metadata:
+      labels:
+        app: my-custom-hpa
+    spec:
+      containers:
+      - name: my-custom-hpa
+        image: example-custom-hpa/hpa:1.0.0
+        imagePullPolicy: Never
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
