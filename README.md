@@ -24,6 +24,12 @@ The custom HPA retrieves the list of pods from the kubernetes master and for eac
 - `npm install`
 - `npm start`
 
+# Fast iterating kubernetes deploy + development
+
+You can use the following concatinated expression to build the container, delete current pods and have it be used. Because we are re-using the same version after deleting the pod in the cluster it uses the new image. 
+
+- APP: `docker build -t example-custom-hpa/app:1.0.0 -f app/Dockerfile ./app && kubectl get pods | grep my-app | awk '{print $1}' | xargs kubectl delete pod`
+- HPA: `docker build -t example-custom-hpa/hpa:1.0.0 -f hpa/Dockerfile ./hpa && kubectl get pods | grep hpa | awk '{print $1}' | xargs kubectl delete pod`
 
 # Get the demo running (using minikube)
 
@@ -43,16 +49,7 @@ The custom HPA retrieves the list of pods from the kubernetes master and for eac
 - Deploy the hpa to kubernetes `kubectl create -f app/deployment.yaml`
 - Observe that it works by looking at the logs `kubectl get pods | grep my-custom-hpa | awk '{print $1}' | xargs kubectl logs -f `
 
-
-## iterating development
-
-You can use the following concatinated expression to build the container, delete current pods and have it be used. Because we are re-using the same version after deleting the pod in the cluster it uses the new image. 
-
-- APP: `docker build -t example-custom-hpa/app:1.0.0 -f app/Dockerfile ./app && kubectl get pods | grep my-app | awk '{print $1}' | xargs kubectl delete pod`
-- HPA: `docker build -t example-custom-hpa/hpa:1.0.0 -f hpa/Dockerfile ./hpa && kubectl get pods | grep hpa | awk '{print $1}' | xargs kubectl delete pod`
-
-
-### scale traffic using ab
+## scale traffic using ab
 
 Lets hit it with some traffic. The IP address + port of the demo app is retrieved using `minikube service my-app`
 - `ab -n 1000 -c 3 http://192.168.99.100:31284/` update the ip address as returned from the above command
