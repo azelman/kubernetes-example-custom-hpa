@@ -2,8 +2,9 @@ const fs = require('fs');
 const Rx = require('rxjs/Rx');
 const request = require('request');
 
-const DEPLOYMENT_NAME = 'my-app';
+const DEPLOYMENT_NAME = 'webswing';
 const GET_PODS_ENDPOINT = '/api/v1/namespaces/default/pods';
+const DELETE_POD_ENDPOINT = '/api/v1/pods'
 const GET_DEPLOYMENTS_ENDPOINT = '/apis/extensions/v1beta1/namespaces/default/deployments';
 
 // the master uses self-signed SSL certs
@@ -24,32 +25,36 @@ Rx.Observable.defer(() => new Promise((resolve, reject) => {
   Rx.Observable.interval(10 * 1000),
   (credentials, i) => credentials
 )
-.switchMap(credentials => getPodsOfDeployment(credentials, DEPLOYMENT_NAME)
-  .mergeMap(pod => getMetrics(pod))
-  .toArray()
-  .map(metricArray => {
-    //calculate average req/sec of all pods
-    const sum = metricArray.reduce((acc, curr) => acc + curr, 0);
-    return {
-      pods: metricArray.length,
-      avgReqSec: sum / metricArray.length
-    };
-  })
-  .do(loadTuple => console.log('current load: ' + JSON.stringify(loadTuple)))
+.do(credentials => {
+		pods = getPodsOfDeployment(credentials, DEPLOYMENT_NAME);
+		load = getMetrics(pods[0]);
+		console.log('current load: ' + JSON.stringify(metrics));
+		return {
+			pods: pods;
+			load: load;
+		}
+	}
   .switchMap(loadTuple => {
-    if(loadTuple.avgReqSec > 10) {
-      return updateReplicas(credentials.masterUrl, DEPLOYMENT_NAME, loadTuple.pods + 1, credentials.serviceToken)
-        .do(() => console.log(`scaled up to ${loadTuple.pods + 1} replicas`))
-        .delay(10 * 1000) /* delay next scaling operation */
-    }
+	if(loadTuple.load > 3) { /* Avg number of instances per pod */	  
+	  sacrifice = getDownscaleNode(loadTuple.pods[0]);
+	  if(sacrifice.state == "DRAIN"){
+		console.log('Node ${sacrifice.nodeId} is in DRAIN mode with ${sacrifice.runningCount} running instances');
+		if(sacrifice.runningCount == 0){
+			deletePOD(sacrifice.name, credentials.masterUrl, DEPLOYMENT_NAME, loadTuple.pods.length + 1, credentials.serviceToken)
+			return updateReplicas(credentials.masterUrl, DEPLOYMENT_NAME, loadTuple.pods.length + 1, credentials.serviceToken)
+				.do(() => console.log(`scaled up to ${loadTuple.pods.length + 1} replicas`))
+				.delay(20 * 1000) /* delay next scaling operation */
+		}
+	  }
+	}
 
-    if(loadTuple.avgReqSec < 5 && loadTuple.pods > 1) {
-      return updateReplicas(credentials.masterUrl, DEPLOYMENT_NAME, loadTuple.pods - 1, credentials.serviceToken)
-        .do(() => console.log(`scaled down to ${loadTuple.pods - 1} replicas`))
-        .delay(10 * 1000) /* delay next scaling operation */
-    }
+	if(loadTuple.load < 2) {
+	  return updateReplicas(credentials.masterUrl, DEPLOYMENT_NAME, loadTuple.pods.length - 1, credentials.serviceToken)
+		.do(() => console.log(`scaled down to ${loadTuple.pods.length - 1} replicas`))
+		.delay(20 * 1000) /* delay next scaling operation */
+	}
 
-    return Rx.Observable.empty();//noop
+	return Rx.Observable.empty();//noop
   })
 )
 .subscribe(
@@ -61,10 +66,22 @@ Rx.Observable.defer(() => new Promise((resolve, reject) => {
 function getMetrics(pod) {
   return Rx.Observable.defer(() => {
     return new Promise((resolve, reject) => {
-      request.get(`http://${pod.status.podIP}:8080/rate`, (error, response, body) =>{
+      request.get(`http://${pod.status.podIP}:8080/rest/instanceRate`, (error, response, body) =>{
         if(error) { return reject(error); }
         if(response && response.statusCode >= 300){ return reject(new Error(`Unable to get data from api: ${body}`)) }
-        return resolve(body);
+        return resolve({pod: pod, load: body]);
+      });
+    });
+  });
+}
+
+function getDownscaleNode(pod) {
+  return Rx.Observable.defer(() => {
+    return new Promise((resolve, reject) => {
+      request.get(`http://${pod.status.podIP}:8080/rest/getDonwscaleNode`, (error, response, body) =>{
+        if(error) { return reject(error); }
+        if(response && response.statusCode >= 300){ return reject(new Error(`Unable to get data from api: ${body}`)) }
+        return resolve({pod: pod, load: body]);
       });
     });
   });
@@ -85,6 +102,23 @@ function getFromKubernetesApi(kubernetesMasterURL, apiEndPoint, token) {
       request.get(options, (error, response, body) =>{
         if(error) { return reject(error); }
         if(response && response.statusCode >= 300){ return reject(new Error(`Unable to get data from api: ${body}`)) }
+        return resolve(body);
+      });
+    });
+  });
+}
+
+function deletePOD(pod, kubernetesMasterURL, deployment, desiredReplicas, token) {
+  const pods = getFromKubernetesApi(credentials.masterUrl, GET_PODS_ENDPOINT + '?fieldSelector\=status.podIP\=${pod}', credentials.serviceToken);
+  console.log('Delete POD: ' + pods[0]);
+  
+  const options = _createHttpRequestOptions(kubernetesMasterURL, '${DELETE_POD_ENDPOINT}/${pods[0].name}', token);
+
+  return Rx.Observable.defer(() => {
+    return new Promise((resolve, reject) => {
+      request.delete(options, (error, response, body) =>{
+        if(error) { return reject(error); }
+        if(response && response.statusCode >= 300){ return reject(new Error(`Unable to delete pod: ${body}`)) }
         return resolve(body);
       });
     });
