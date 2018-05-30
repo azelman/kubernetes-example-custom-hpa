@@ -11,15 +11,10 @@ const GET_DEPLOYMENTS_ENDPOINT = '/apis/extensions/v1beta1/namespaces/default/de
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 Rx.Observable.defer(() => new Promise((resolve, reject) => {
-  fs.readFile('/var/run/secrets/kubernetes.io/serviceaccount/token', (err, serviceToken) => {
-    if (err) {
-      return reject(err);
-    }
     resolve({
-      masterUrl: 'https://kubernetes',
-      serviceToken: serviceToken
+	    masterUrl: 'http://localhost:8080',
+      serviceToken: 'serviceToken'
     });
-  });
 }))
 .combineLatest(
   Rx.Observable.interval(10 * 1000),
@@ -28,12 +23,12 @@ Rx.Observable.defer(() => new Promise((resolve, reject) => {
 .do(credentials => {
 		pods = getPodsOfDeployment(credentials, DEPLOYMENT_NAME);
 		load = getMetrics(pods[0]);
-		console.log('current load: ' + JSON.stringify(metrics));
+		console.log('current load: ' + JSON.stringify(load));
 		return {
-			pods: pods;
-			load: load;
+			pods: pods,
+			load: load
 		}
-	}
+	})
   .switchMap(loadTuple => {
 	if(loadTuple.load > 3) { /* Avg number of instances per pod */	  
 	  sacrifice = getDownscaleNode(loadTuple.pods[0]);
@@ -56,7 +51,7 @@ Rx.Observable.defer(() => new Promise((resolve, reject) => {
 
 	return Rx.Observable.empty();//noop
   })
-)
+
 .subscribe(
   val => {},
   err => console.log('ERR: ' + err.message + '\r\n' + err.stack)
@@ -69,7 +64,7 @@ function getMetrics(pod) {
       request.get(`http://${pod.status.podIP}:8080/rest/instanceRate`, (error, response, body) =>{
         if(error) { return reject(error); }
         if(response && response.statusCode >= 300){ return reject(new Error(`Unable to get data from api: ${body}`)) }
-        return resolve({pod: pod, load: body]);
+        return resolve({pod: pod, load: body});
       });
     });
   });
@@ -81,7 +76,7 @@ function getDownscaleNode(pod) {
       request.get(`http://${pod.status.podIP}:8080/rest/getDonwscaleNode`, (error, response, body) =>{
         if(error) { return reject(error); }
         if(response && response.statusCode >= 300){ return reject(new Error(`Unable to get data from api: ${body}`)) }
-        return resolve({pod: pod, load: body]);
+        return resolve({pod: pod, load: body});
       });
     });
   });

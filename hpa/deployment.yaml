@@ -1,20 +1,20 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: my-custom-hpa
+  name: hpa4webswing
   labels:
-    app: my-custom-hpa
+    app: hpa4webswing
 spec:
   revisionHistoryLimit: 4 # limit our previous replicasets to four revisions
   replicas: 1 # will be set by the deploy script
   template:
     metadata:
       labels:
-        app: my-custom-hpa
+        app: hpa4webswing
     spec:
       containers:
-      - name: my-custom-hpa
-        image: example-custom-hpa/hpa:1.0.0
+      - name: hpa
+        image: hpa/hpa:1.0
         imagePullPolicy: Never
         resources:
           requests:
